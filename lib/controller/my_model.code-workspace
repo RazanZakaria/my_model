@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"name": "camera_sample",
+			"path": "../../../../camera_ai/camera_sample"
+		}
+	],
+	"settings": {}
+}

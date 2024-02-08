@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_tflite/flutter_tflite.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:image/image.dart'
+    as imglib; //library for image manipulation capabilities.
 
 class ScanController extends GetxController {
   @override
@@ -33,11 +35,11 @@ class ScanController extends GetxController {
     //Get Permission from user to access the camera
     if (await Permission.camera.request().isGranted) {
       cameras = await availableCameras();
-      cameraController = CameraController(cameras[1], ResolutionPreset.low); 
+      cameraController = CameraController(cameras[1], ResolutionPreset.low);
       await cameraController.initialize().then((value) {
         cameraController.startImageStream((image) {
           cameraCount++;
-          if (cameraCount % 10 == 0) { 
+          if (cameraCount % 10 == 0) {
             cameraCount = 0;
             objectDetector(image);
           }
@@ -51,25 +53,6 @@ class ScanController extends GetxController {
     }
   }
 
-  // initCamera() async {
-  //   cameras = await availableCameras();
-  //   cameraController = CameraController(
-  //     cameras[0],
-  //     ResolutionPreset.max,
-  //   );
-  //   await cameraController.initialize().then((value) {
-  //     cameraController.startImageStream((image) {
-  //       if (!isDetecting) {
-  //         isDetecting = true;
-  //         objectDetector(image).then((_) => isDetecting = false);
-  //       }
-  //       update();
-  //     });
-  //   });
-  //   isCameraInitialized(true);
-  //   update();
-  // }
-
   initTFLite() async {
     await Tflite.loadModel(
         model: "assets/converted_model.tflite",
@@ -79,54 +62,50 @@ class ScanController extends GetxController {
         useGpuDelegate: false);
   }
 
-  // objectDetector(CameraImage image) async {
-  //   var detector = await Tflite.runModelOnFrame(
-  //     bytesList: image.planes.map((e) {
-  //       return e.bytes;
-  //     }).toList(),
-  //     asynch: true,
-  //     imageHeight: image.height,
-  //     imageWidth: image.width,
-  //     imageMean: 127.5,
-  //     imageStd: 127.5,
-  //     numResults: 1,
-  //     rotation: 90,
-  //     threshold: 0.4,
-  //   );
-
-  //   if (detector != null) {
-  //     if (kDebugMode) {
-  //       print("Result is $detector"); //log
-  //     }
-  //   }
-  // }
-
   objectDetector(CameraImage image) async {
-  try {
-    //print("Input Image Shape: ${image.width}x${image.height}");
-  
-    var detector = await Tflite.runModelOnFrame(
-      bytesList: image.planes.map((e) {
-        return e.bytes;
-      }).toList(),
-      asynch: true,
-      imageHeight: image.height, //640
-      imageWidth: image.width, //480
-      imageMean: 127.5,
-      imageStd: 127.5,
-      numResults: 1,
-      rotation: 90,
-      threshold: 0.4,
-    );
+    try {
+      var imgBytes =
+          image.planes.fold<Uint8List>(Uint8List(0), (buffer, plane) {
+        var bytes = plane.bytes;
+        if (buffer.isEmpty) {
+          buffer = bytes;
+        } else {
+          buffer = Uint8List.fromList([...buffer, ...bytes]);
+        }
+        return buffer;
+      });
 
-    if (detector != null) {
-      if (kDebugMode) {
-        print("Result is $detector");
+      // Create Image object
+      var img = imglib.Image.fromBytes(image.width, image.height, imgBytes);
+
+      // Resize the image
+      img = imglib.copyResize(img, width: 416, height: 416);
+
+      // Convert resized image back to List<Uint8List>
+      var resizedBytes =
+          img.getBytes().map((b) => Uint8List.fromList([b])).toList();
+
+      print("Number of bytes in resized image: ${resizedBytes.length}");
+
+      var detector = await Tflite.runModelOnFrame(
+        bytesList: resizedBytes,
+        asynch: true,
+        imageHeight: image.height,
+        imageWidth: image.width,
+        imageMean: 127.5,
+        imageStd: 127.5,
+        numResults: 1,
+        rotation: 90,
+        threshold: 0.4,
+      );
+
+      if (detector != null) {
+        if (kDebugMode) {
+          print("Result is $detector");
+        }
       }
+    } catch (e) {
+      print("Error in object detection: $e");
     }
-  } catch (e) {
-    print("Error in object detection: $e");
   }
-}
-
 }
