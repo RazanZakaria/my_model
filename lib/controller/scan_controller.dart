@@ -62,50 +62,55 @@ class ScanController extends GetxController {
         useGpuDelegate: false);
   }
 
+  var singleTime = false;
   objectDetector(CameraImage image) async {
-    try {
-      var imgBytes =
-          image.planes.fold<Uint8List>(Uint8List(0), (buffer, plane) {
-        var bytes = plane.bytes;
-        if (buffer.isEmpty) {
-          buffer = bytes;
-        } else {
-          buffer = Uint8List.fromList([...buffer, ...bytes]);
-        }
-        return buffer;
-      });
+    if (!singleTime) {
+      singleTime = true;
+      try {
+        var imgBytes =
+            image.planes.fold<Uint8List>(Uint8List(0), (buffer, plane) {
+          var bytes = plane.bytes;
+          if (buffer.isEmpty) {
+            buffer = bytes;
+          } else {
+            buffer = Uint8List.fromList([...buffer, ...bytes]);
+          }
+          return buffer;
+        });
 
-      // Create Image object
-      var img = imglib.Image.fromBytes(image.width, image.height, imgBytes);
+        // Create Image object
+        var img = imglib.Image.fromBytes(image.width, image.height, imgBytes);
 
-      // Resize the image
-      img = imglib.copyResize(img, width: 416, height: 416);
+        // Resize the image
+        //img = imglib.copyResize(img, width: 200, height: 200);
 
-      // Convert resized image back to List<Uint8List>
-      var resizedBytes =
-          img.getBytes().map((b) => Uint8List.fromList([b])).toList();
+        // Convert resized image back to List<Uint8List>
+        var resizedBytes =
+            img.getBytes().map((b) => Uint8List.fromList([b])).toList();
 
-      print("Number of bytes in resized image: ${resizedBytes.length}");
+        //print("Number of bytes in resized image: ${resizedBytes.length}");
+        var detector = await Tflite.runModelOnFrame(
+          bytesList: [img.getBytes()],
+          asynch: true,
+          imageHeight: img.height,
+          imageWidth: img.width,
+          imageMean: 127.5,
+          imageStd: 127.5,
+          numResults: 26,
+          rotation: 90,
+          threshold: 0.4,
+        )
+            .then((value) => {print('Output TF $value')})
+            .onError((error, stackTrace) => {print('Output Error TF $error')});
 
-      var detector = await Tflite.runModelOnFrame(
-        bytesList: resizedBytes,
-        asynch: true,
-        imageHeight: image.height,
-        imageWidth: image.width,
-        imageMean: 127.5,
-        imageStd: 127.5,
-        numResults: 1,
-        rotation: 90,
-        threshold: 0.4,
-      );
-
-      if (detector != null) {
+        /*if (detector != null) {
         if (kDebugMode) {
           print("Result is $detector");
         }
+      }*/
+      } catch (e) {
+        print("Error in object detection: $e ==== ${e.toString()}");
       }
-    } catch (e) {
-      print("Error in object detection: $e");
     }
   }
 }
