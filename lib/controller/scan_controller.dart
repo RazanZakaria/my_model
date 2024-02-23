@@ -1,10 +1,13 @@
+import 'dart:async';
+import 'dart:ui';
+import 'dart:ui' as ui;
+
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tflite/flutter_tflite.dart';
 import 'package:get/get.dart';
+import 'package:image/image.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:image/image.dart'
-    as imglib; //library for image manipulation capabilities.
 
 class ScanController extends GetxController {
   @override
@@ -55,8 +58,8 @@ class ScanController extends GetxController {
 
   initTFLite() async {
     await Tflite.loadModel(
-        model: "assets/converted_model.tflite",
-        labels: "assets/new_onnx_model94.txt",
+        model: "assets/model_unquant.tflite",
+        labels: "assets/labels.txt",
         isAsset: true,
         numThreads: 1,
         useGpuDelegate: false);
@@ -64,36 +67,13 @@ class ScanController extends GetxController {
 
   var singleTime = false;
   objectDetector(CameraImage image) async {
-    if (!singleTime) {
-      singleTime = true;
-      try {
-        var imgBytes =
-            image.planes.fold<Uint8List>(Uint8List(0), (buffer, plane) {
-          var bytes = plane.bytes;
-          if (buffer.isEmpty) {
-            buffer = bytes;
-          } else {
-            buffer = Uint8List.fromList([...buffer, ...bytes]);
-          }
-          return buffer;
-        });
-
-        // Create Image object
-        var img = imglib.Image.fromBytes(image.width, image.height, imgBytes);
-
-        // Resize the image
-        //img = imglib.copyResize(img, width: 200, height: 200);
-
-        // Convert resized image back to List<Uint8List>
-        var resizedBytes =
-            img.getBytes().map((b) => Uint8List.fromList([b])).toList();
-
+   
         //print("Number of bytes in resized image: ${resizedBytes.length}");
         var detector = await Tflite.runModelOnFrame(
-          bytesList: [img.getBytes()],
+          bytesList: image.planes.map((plane) {return plane.bytes;}).toList(),
           asynch: true,
-          imageHeight: img.height,
-          imageWidth: img.width,
+          imageHeight: image.height,
+          imageWidth: image.width,
           imageMean: 127.5,
           imageStd: 127.5,
           numResults: 26,
@@ -108,9 +88,7 @@ class ScanController extends GetxController {
           print("Result is $detector");
         }
       }*/
-      } catch (e) {
-        print("Error in object detection: $e ==== ${e.toString()}");
-      }
+      
     }
   }
-}
+
